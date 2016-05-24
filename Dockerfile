@@ -1,5 +1,5 @@
-FROM centos:7
-MAINTAINER Skiychan <dev@skiy.net>
+FROM index.alauda.cn/tutum/centos:centos7
+MAINTAINER Jack <jack@nightc.com>
 ##
 # Nginx: 1.10.0
 # PHP  : 7.0.6
@@ -16,13 +16,12 @@ RUN yum install -y gcc \
     automake \
     libtool \
     make \
-    cmake && \
-    yum clean all
+    cmake
 
 #Install PHP library
 ## libmcrypt-devel DIY
-RUN rpm -ivh http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm && \
-    yum install -y wget \
+#RUN rpm -ivh http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm && \
+RUN yum install -y wget \
     zlib \
     zlib-devel \
     openssl \
@@ -37,8 +36,7 @@ RUN rpm -ivh http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch
     freetype-devel \
     libmcrypt-devel \
     openssh-server \
-    python-setuptools && \
-    yum clean all
+    python-setuptools
 
 #Add user
 RUN groupadd -r www && \
@@ -47,8 +45,7 @@ RUN groupadd -r www && \
 #Download nginx & php
 RUN mkdir -p /home/nginx-php && cd $_ && \
     wget -c -O nginx.tar.gz http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz && \
-    wget -O php.tar.gz http://php.net/distributions/php-$PHP_VERSION.tar.gz && \
-    curl -O -SL https://github.com/xdebug/xdebug/archive/XDEBUG_2_4_0RC3.tar.gz
+    wget -O php.tar.gz http://php.net/distributions/php-$PHP_VERSION.tar.gz
 
 #Make install nginx
 RUN cd /home/nginx-php && \
@@ -110,18 +107,14 @@ RUN cd /home/nginx-php && \
     --enable-fileinfo \
     --disable-rpath \
     --enable-ipv6 \
-    --disable-debug \
-    --without-pear && \
+    --disable-debug && \
     make && make install
 
-#Add xdebug extension
-RUN cd /home/nginx-php && \
-    tar -zxvf XDEBUG_2_4_0RC3.tar.gz && \
-    cd xdebug-XDEBUG_2_4_0RC3 && \
-    /usr/local/php/bin/phpize && \
-    ./configure --enable-xdebug --with-php-config=/usr/local/php/bin/php-config && \
-    make && \
-    cp modules/xdebug.so /usr/local/php/lib/php/extensions/no-debug-non-zts-20151012/
+#Add the Yaf
+RUN /usr/local/php/bin/pecl install yaf
+
+#Add the mongodb
+RUN /usr/local/php/bin/pecl install mongodb
 
 RUN cd /home/nginx-php/php-$PHP_VERSION && \
     cp php.ini-production /usr/local/php/etc/php.ini && \
@@ -144,7 +137,9 @@ RUN cd / && rm -rf /home/nginx-php
 VOLUME ["/data/www", "/usr/local/nginx/conf/ssl", "/usr/local/nginx/conf/vhost", "/usr/local/php/etc/php.d"]
 ADD index.php /data/www/index.php
 
-ADD xdebug.ini /usr/local/php/etc/php.d/xdebug.ini
+ADD yaf.ini /usr/local/php/etc/php.d/yaf.ini
+ADD mongodb.ini /usr/local/php/etc/php.d/mongodb.ini
+
 
 #Update nginx config
 ADD nginx.conf /usr/local/nginx/conf/nginx.conf
@@ -154,10 +149,13 @@ ADD start.sh /start.sh
 RUN chmod +x /start.sh
 
 #Set port
-EXPOSE 80 443 9001
+EXPOSE 80 443
 
 #Start it
-ENTRYPOINT ["/start.sh"]
+#ENTRYPOINT ["/start.sh"]
 
 #Start web server
 #CMD ["/bin/bash", "/start.sh"]
+
+# Clean
+RUN yum clean all
