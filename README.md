@@ -52,3 +52,8 @@ docker run --name nginx -p 8080:80 -d -v /your_php_extension:/usr/local/php/etc/
 Author: Skiychan    
 Email:  dev@skiy.net       
 Link:   https://www.zzzzy.com
+
+## new
+add the yaf   
+add the mongodb   
+del the xdebug   
