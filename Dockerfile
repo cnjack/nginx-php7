@@ -1,4 +1,4 @@
-FROM index.alauda.cn/tutum/centos:centos7
+FROM index.alauda.cn/library/ubuntu:14.04.4
 MAINTAINER Jack <jack@nightc.com>
 ##
 # Nginx: 1.10.0
@@ -10,42 +10,65 @@ MAINTAINER Jack <jack@nightc.com>
 ENV NGINX_VERSION 1.10.0
 ENV PHP_VERSION 7.0.6
 
-RUN yum install -y gcc \
-    gcc-c++ \
-    autoconf \
-    automake \
-    libtool \
-    make \
-    cmake
+#Update the sources
+ADD  sources.list /etc/apt/sources.list
+RUN apt-get update
+RUN apt-get install dialog -y
+
+RUN apt-get install -y \
+        autoconf \
+        file \
+        g++ \
+        gcc \
+        libc-dev \
+        make \
+        automake \
+        pkg-config \
+        re2c \
+        wget \
+        python-setuptools \
+    --no-install-recommends
+
+#Download nginx & php && yaf
+RUN mkdir -p /home/nginx-php && cd /home/nginx-php && \
+    wget -c -O nginx.tar.gz http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz
+
+RUN mkdir -p /home/nginx-php && cd /home/nginx-php && \
+    wget -O php.tar.gz http://php.net/distributions/php-$PHP_VERSION.tar.gz
+
+RUN mkdir -p /home/nginx-php && cd /home/nginx-php && \
+    wget -c -O yaf-3.0.2.tgz http://pecl.php.net/get/yaf-3.0.2.tgz
 
 #Install PHP library
-## libmcrypt-devel DIY
-#RUN rpm -ivh http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm && \
-RUN yum install -y wget \
-    zlib \
-    zlib-devel \
-    openssl \
-    openssl-devel \
-    pcre-devel \
-    libxml2 \
-    libxml2-devel \
-    libcurl \
-    libcurl-devel \
-    libpng-devel \
-    libjpeg-devel \
-    freetype-devel \
-    libmcrypt-devel \
-    openssh-server \
-    python-setuptools
+RUN apt-get install -y \
+        ca-certificates \
+        curl \
+        supervisor \
+        libedit2 \
+        libsqlite3-0 \
+        libxml2 \
+        libjpeg-dev \
+        libpng-dev \
+        libmcrypt-dev \
+        libreadline6 \
+        libreadline6-dev \
+        openssl \
+        libssl-dev \
+        libpcre3 \
+        libpcre3-dev \
+        $PHP_EXTRA_BUILD_DEPS \
+        libcurl4-openssl-dev \
+        libedit-dev \
+        libsqlite3-dev \
+        libssl-dev \
+        libxml2-dev \
+        xz-utils \
+        libfreetype6-dev \
+    --no-install-recommends
 
 #Add user
 RUN groupadd -r www && \
     useradd -M -s /sbin/nologin -r -g www www
-
-#Download nginx & php
-RUN mkdir -p /home/nginx-php && cd $_ && \
-    wget -c -O nginx.tar.gz http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz && \
-    wget -O php.tar.gz http://php.net/distributions/php-$PHP_VERSION.tar.gz
 
 #Make install nginx
 RUN cd /home/nginx-php && \
@@ -62,6 +85,8 @@ RUN cd /home/nginx-php && \
     --without-mail_imap_module \
     --with-http_gzip_static_module && \
     make && make install
+
+
 
 #Make install php
 RUN cd /home/nginx-php && \
@@ -111,7 +136,12 @@ RUN cd /home/nginx-php && \
     make && make install
 
 #Add the Yaf
-RUN /usr/local/php/bin/pecl install yaf
+RUN cd /home/nginx-php && \
+    tar zxf yaf-3.0.2.tgz && \
+    cd yaf-3.0.2 && \
+    /usr/local/php/bin/phpize && \
+    ./configure --with-php-config=/usr/local/php/bin/php-config && \
+    make && make install
 
 #Add the mongodb
 RUN /usr/local/php/bin/pecl install mongodb
@@ -128,34 +158,29 @@ RUN easy_install supervisor && \
     mkdir -p /var/run/supervisord
 
 #Add supervisord conf
-ADD supervisord.conf /etc/supervisord.conf
+ADD supervisord.conf /etc/supervisor/
 
 #Remove zips
 RUN cd / && rm -rf /home/nginx-php
 
 #Create web folder
 VOLUME ["/data/www", "/usr/local/nginx/conf/ssl", "/usr/local/nginx/conf/vhost", "/usr/local/php/etc/php.d"]
-ADD index.php /data/www/index.php
+
+ADD index.php /data/www/
 
 ADD yaf.ini /usr/local/php/etc/php.d/yaf.ini
 ADD mongodb.ini /usr/local/php/etc/php.d/mongodb.ini
 
-
 #Update nginx config
 ADD nginx.conf /usr/local/nginx/conf/nginx.conf
 
-#Start
-ADD start.sh /start.sh
-RUN chmod +x /start.sh
+ADD php.ini /usr/local/php/etc/
 
 #Set port
 EXPOSE 80 443
 
-#Start it
-#ENTRYPOINT ["/start.sh"]
-
 #Start web server
-#CMD ["/bin/bash", "/start.sh"]
+CMD ["/usr/local/bin/supervisord", "-n", "-c/etc/supervisor/supervisord.conf"]
 
 # Clean
-RUN yum clean all
+RUN rm -r /var/lib/apt/lists/*
